@@ -2,10 +2,17 @@ from flask import Flask, request, jsonify
 
 app = Flask(__name__)
 
-# Valid keys
-VALID_KEYS = ["VladislavLalic", "DEF-456-UVW", "N355BSD16DXDRRT", "A40DJ0BGTSW494M", "Grobar", "S3L5KC5FV4WEKW8"]
+# Original valid keys
+VALID_KEYS = [
+    "VladislavLalic",
+    "DEF-456-UVW",
+    "N355BSD16DXDRRT",
+    "A40DJ0BGTSW494M",
+    "Grobar",
+    "S3L5KC5FV4WEKW8"
+]
 
-# Store key -> device mapping
+# New: key -> device mapping (in-memory)
 KEY_DEVICE_MAP = {}
 
 @app.route("/validate", methods=["POST"])
@@ -20,16 +27,16 @@ def validate():
     if key not in VALID_KEYS:
         return jsonify({"valid": False, "reason": "Invalid key"})
 
-    # If key is not bound yet, bind it
+    # If key not yet bound, bind to this device
     if key not in KEY_DEVICE_MAP:
         KEY_DEVICE_MAP[key] = device_id
         return jsonify({"valid": True, "bound": True})
 
-    # If key already bound to same device
+    # If key already bound to this device, allow
     if KEY_DEVICE_MAP[key] == device_id:
         return jsonify({"valid": True, "bound": True})
 
-    # If key bound to a different device
+    # If key bound elsewhere → reject
     return jsonify({"valid": False, "reason": "Key already used on another device"})
 
 @app.route("/")
