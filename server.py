@@ -2,24 +2,39 @@ from flask import Flask, request, jsonify
 
 app = Flask(__name__)
 
-# Example list of valid keys (you can replace this with a database or file)
+# Valid keys
 VALID_KEYS = ["VladislavLalic", "DEF-456-UVW", "N355BSD16DXDRRT", "A40DJ0BGTSW494M", "Grobar", "S3L5KC5FV4WEKW8"]
 
-@app.route("/validate", methods=["GET"])
+# Store key -> device mapping
+KEY_DEVICE_MAP = {}
+
+@app.route("/validate", methods=["POST"])
 def validate():
-    key = request.args.get("key")
-    if not key:
-        return jsonify({"error": "No key provided"}), 400
+    data = request.json
+    key = data.get("key")
+    device_id = data.get("device_id")
 
-    if key in VALID_KEYS:
-        return jsonify({"valid": True})
-    else:
-        return jsonify({"valid": False})
+    if not key or not device_id:
+        return jsonify({"error": "Key and device_id required"}), 400
 
-# Optional: root route to check server is alive
+    if key not in VALID_KEYS:
+        return jsonify({"valid": False, "reason": "Invalid key"})
+
+    # If key is not bound yet, bind it
+    if key not in KEY_DEVICE_MAP:
+        KEY_DEVICE_MAP[key] = device_id
+        return jsonify({"valid": True, "bound": True})
+
+    # If key already bound to same device
+    if KEY_DEVICE_MAP[key] == device_id:
+        return jsonify({"valid": True, "bound": True})
+
+    # If key bound to a different device
+    return jsonify({"valid": False, "reason": "Key already used on another device"})
+
 @app.route("/")
 def home():
-    return "License server is running!"
+    return "License server with device binding is running!"
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=5000)
