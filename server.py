@@ -3,7 +3,7 @@ from flask import Flask, request, jsonify
 app = Flask(__name__)
 
 # Example list of valid keys (you can replace this with a database or file)
-VALID_KEYS = ["ABC-123-XYZ", "DEF-456-UVW"]
+VALID_KEYS = ["VladislavLalic", "DEF-456-UVW", "N355BSD16DXDRRT", "A40DJ0BGTSW494M", "Grobar", "S3L5KC5FV4WEKW8"]
 
 @app.route("/validate", methods=["GET"])
 def validate():
