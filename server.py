@@ -4,7 +4,6 @@ app = Flask(__name__)
 
 # Original valid keys
 VALID_KEYS = [
-    "VladislavLalic",
     "DEF-456-UVW",
     "N355BSD16DXDRRT",
     "A40DJ0BGTSW494M",
