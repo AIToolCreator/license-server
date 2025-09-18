@@ -1,51 +1,47 @@
 from flask import Flask, request, jsonify
-import json
+import requests
 import os
 
 app = Flask(__name__)
 
-# Default valid keys
-DEFAULT_KEYS = [
-    "VladislavLalic",
-    "DEF-456-UVW",
-    "N355BSD16DXDRRT",
-    "A40DJ0BGTSW494M",
-    "Grobar",
-    "S3L5KC5FV4WEKW8"
-]
+# ---------------- Configuration ----------------
+JSONBIN_ID = "68cbd52dae596e708ff2cc0b"  # Your bin ID
+JSONBIN_SECRET = "$2a$10$1JSftuEGZVvuqBTLGi3URulP.U6VBxFlrzs5tfHcdtzJ02Rx2rGzi"  # X-Master-Key
+JSONBIN_URL = f"https://api.jsonbin.io/v3/b/{JSONBIN_ID}"
 
-# JSON file to persist key-device bindings
-KEY_FILE = "key_device_map.json"
+HEADERS = {
+    "X-Master-Key": JSONBIN_SECRET,
+    "Content-Type": "application/json"
+}
 
-# Load key-device map, create default if file doesn't exist
-def load_keys():
-    if os.path.exists(KEY_FILE):
-        try:
-            with open(KEY_FILE, "r") as f:
-                data = json.load(f)
-        except json.JSONDecodeError:
-            print("[WARN] JSON decode error, recreating key file")
-            data = {key: "" for key in DEFAULT_KEYS}
-            save_keys(data)
-    else:
-        data = {key: "" for key in DEFAULT_KEYS}
-        save_keys(data)
-    # Ensure all default keys exist in case new ones were added
-    for key in DEFAULT_KEYS:
-        if key not in data:
-            data[key] = ""
-    return data
+# ---------------- Helpers ----------------
+def load_keys_from_bin():
+    """Fetch the key-device map from JSONBin."""
+    try:
+        resp = requests.get(JSONBIN_URL + "/latest", headers=HEADERS, timeout=6)
+        if resp.status_code == 200:
+            data = resp.json()
+            # JSONBin stores your data under 'record'
+            return data.get("record", {})
+        else:
+            print("[WARN] Failed to load keys from JSONBin:", resp.status_code)
+            return {}
+    except Exception as e:
+        print("[ERROR] Exception loading keys from JSONBin:", e)
+        return {}
 
-def save_keys(data):
-    with open(KEY_FILE, "w") as f:
-        json.dump(data, f, indent=4)
+def save_keys_to_bin(data):
+    """Update the JSONBin with the new key-device map."""
+    try:
+        resp = requests.put(JSONBIN_URL, headers=HEADERS, json=data, timeout=6)
+        if resp.status_code not in [200, 201]:
+            print("[WARN] Failed to save keys to JSONBin:", resp.status_code, resp.text)
+    except Exception as e:
+        print("[ERROR] Exception saving keys to JSONBin:", e)
 
-# Load keys on startup
-KEY_DEVICE_MAP = load_keys()
-
+# ---------------- Routes ----------------
 @app.route("/validate", methods=["POST"])
 def validate():
-    global KEY_DEVICE_MAP
     data = request.json
     key = data.get("key")
     device_id = data.get("device_id")
@@ -53,18 +49,20 @@ def validate():
     if not key or not device_id:
         return jsonify({"valid": False, "error": "Key and device_id required"}), 400
 
+    keys_map = load_keys_from_bin()
+
     # Check key exists
-    if key not in KEY_DEVICE_MAP:
+    if key not in keys_map:
         return jsonify({"valid": False, "reason": "Invalid or revoked key"})
 
     # If key unbound, bind it to this device
-    if KEY_DEVICE_MAP[key] == "":
-        KEY_DEVICE_MAP[key] = device_id
-        save_keys(KEY_DEVICE_MAP)
+    if keys_map[key] == "":
+        keys_map[key] = device_id
+        save_keys_to_bin(keys_map)
         return jsonify({"valid": True, "bound": True})
 
     # If already bound to this device, allow
-    if KEY_DEVICE_MAP[key] == device_id:
+    if keys_map[key] == device_id:
         return jsonify({"valid": True, "bound": True})
 
     # Key bound elsewhere → reject
@@ -81,14 +79,16 @@ def reset_keys():
     if admin_pass != "your_admin_password":
         return jsonify({"error": "Unauthorized"}), 401
 
-    for k in KEY_DEVICE_MAP:
-        KEY_DEVICE_MAP[k] = ""
-    save_keys(KEY_DEVICE_MAP)
+    keys_map = load_keys_from_bin()
+    for k in keys_map:
+        keys_map[k] = ""
+    save_keys_to_bin(keys_map)
     return jsonify({"status": "All keys reset"})
 
 @app.route("/")
 def home():
-    return "License server with persistent device binding is running!"
+    return "License server with JSONBin device binding is running!"
 
+# ---------------- Main ----------------
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=5000)
