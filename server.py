@@ -1,6 +1,5 @@
 from flask import Flask, request, jsonify
 import requests
-import os
 
 app = Flask(__name__)
 
@@ -21,8 +20,15 @@ def load_keys_from_bin():
         resp = requests.get(JSONBIN_URL + "/latest", headers=HEADERS, timeout=6)
         if resp.status_code == 200:
             data = resp.json()
-            # JSONBin stores your data under 'record'
-            return data.get("record", {})
+            raw = data.get("record", {})
+            # Convert old format (string) to new format (dict with device & owner)
+            keys = {}
+            for k, v in raw.items():
+                if isinstance(v, dict):
+                    keys[k] = {"device": v.get("device", ""), "owner": v.get("owner", "")}
+                else:
+                    keys[k] = {"device": v, "owner": ""}
+            return keys
         else:
             print("[WARN] Failed to load keys from JSONBin:", resp.status_code)
             return {}
@@ -55,14 +61,17 @@ def validate():
     if key not in keys_map:
         return jsonify({"valid": False, "reason": "Invalid or revoked key"})
 
+    key_info = keys_map[key]
+    bound_device = key_info.get("device", "")
+
     # If key unbound, bind it to this device
-    if keys_map[key] == "":
-        keys_map[key] = device_id
+    if bound_device == "":
+        keys_map[key]["device"] = device_id
         save_keys_to_bin(keys_map)
         return jsonify({"valid": True, "bound": True})
 
     # If already bound to this device, allow
-    if keys_map[key] == device_id:
+    if bound_device == device_id:
         return jsonify({"valid": True, "bound": True})
 
     # Key bound elsewhere → reject
@@ -70,10 +79,6 @@ def validate():
 
 @app.route("/reset_keys", methods=["POST"])
 def reset_keys():
-    """
-    Optional: Reset all device bindings without removing keys.
-    Example request: POST /reset_keys with JSON {"admin_pass": "secret"}
-    """
     data = request.json
     admin_pass = data.get("admin_pass", "")
     if admin_pass != "your_admin_password":
@@ -81,7 +86,7 @@ def reset_keys():
 
     keys_map = load_keys_from_bin()
     for k in keys_map:
-        keys_map[k] = ""
+        keys_map[k]["device"] = ""  # unbind all devices
     save_keys_to_bin(keys_map)
     return jsonify({"status": "All keys reset"})
 
