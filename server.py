@@ -6,8 +6,17 @@ app = Flask(__name__)
 
 # ---------------- Configuration ----------------
 JSONBIN_ID = "68cbd52dae596e708ff2cc0b"
-JSONBIN_SECRET = os.environ.get("JSONBIN_SECRET")
-ADMIN_PASS = os.environ.get("ADMIN_PASS")
+
+# CHANGE THESE IF YOU CHANGE YOUR JSONBIN KEY/PASSWORD
+JSONBIN_SECRET = os.environ.get(
+    "JSONBIN_SECRET",
+    "$2a$10$1JSftuEGZVvuqBTLGi3URulP.U6VBxFlrzs5tfHcdtzJ02Rx2rGzi"
+)
+
+ADMIN_PASS = os.environ.get(
+    "ADMIN_PASS",
+    "your_admin_password"
+)
 
 JSONBIN_URL = f"https://api.jsonbin.io/v3/b/{JSONBIN_ID}"
 
@@ -18,15 +27,17 @@ HEADERS = {
 
 # ---------------- Helpers ----------------
 def load_keys_from_bin():
-    """Fetch the key-device map from JSONBin."""
     try:
-        resp = requests.get(JSONBIN_URL + "/latest", headers=HEADERS, timeout=6)
+        resp = requests.get(
+            JSONBIN_URL + "/latest",
+            headers=HEADERS,
+            timeout=6
+        )
 
         if resp.status_code == 200:
             data = resp.json()
             raw = data.get("record", {})
 
-            # Convert old format (string) to new format
             keys = {}
 
             for k, v in raw.items():
@@ -43,16 +54,14 @@ def load_keys_from_bin():
 
             return keys
 
-        else:
-            print("[WARN] Failed to load keys from JSONBin:", resp.status_code)
-            return {}
+        print("[WARN] Failed to load keys:", resp.status_code)
+        return {}
 
     except Exception as e:
-        print("[ERROR] Exception loading keys from JSONBin:", e)
+        print("[ERROR] Exception loading keys:", e)
         return {}
 
 def save_keys_to_bin(data):
-    """Update the JSONBin with the new key-device map."""
     try:
         resp = requests.put(
             JSONBIN_URL,
@@ -68,9 +77,13 @@ def save_keys_to_bin(data):
         print("[ERROR] Exception saving keys:", e)
 
 # ---------------- Routes ----------------
+@app.route("/")
+def home():
+    return "License server with JSONBin device binding is running!"
+
 @app.route("/validate", methods=["POST"])
 def validate():
-    data = request.json
+    data = request.json or {}
 
     key = data.get("key")
     device_id = data.get("device_id")
@@ -83,7 +96,6 @@ def validate():
 
     keys_map = load_keys_from_bin()
 
-    # Check key exists
     if key not in keys_map:
         return jsonify({
             "valid": False,
@@ -93,7 +105,7 @@ def validate():
     key_info = keys_map[key]
     bound_device = key_info.get("device", "")
 
-    # If key unbound, bind it
+    # First activation
     if bound_device == "":
         keys_map[key]["device"] = device_id
         save_keys_to_bin(keys_map)
@@ -103,14 +115,14 @@ def validate():
             "bound": True
         })
 
-    # Already bound to same device
+    # Same device
     if bound_device == device_id:
         return jsonify({
             "valid": True,
             "bound": True
         })
 
-    # Used elsewhere
+    # Different device
     return jsonify({
         "valid": False,
         "reason": "Key already used on another device"
@@ -118,7 +130,8 @@ def validate():
 
 @app.route("/reset_keys", methods=["POST"])
 def reset_keys():
-    data = request.json
+    data = request.json or {}
+
     admin_pass = data.get("admin_pass", "")
 
     if admin_pass != ADMIN_PASS:
@@ -136,10 +149,6 @@ def reset_keys():
     return jsonify({
         "status": "All keys reset"
     })
-
-@app.route("/")
-def home():
-    return "License server with JSONBin device binding is running!"
 
 # ---------------- Main ----------------
 if __name__ == "__main__":
