@@ -6,12 +6,7 @@ app = Flask(__name__)
 
 # ---------------- Configuration ----------------
 JSONBIN_ID = "68cbd52dae596e708ff2cc0b"
-
-# CHANGE THESE IF YOU CHANGE YOUR JSONBIN KEY/PASSWORD
-JSONBIN_SECRET = os.environ.get(
-    "JSONBIN_SECRET",
-    "$2a$10$1JSftuEGZVvuqBTLGi3URulP.U6VBxFlrzs5tfHcdtzJ02Rx2rGzi"
-)
+JSONBIN_SECRET = os.environ.get("JSONBIN_SECRET")
 
 ADMIN_PASS = os.environ.get(
     "ADMIN_PASS",
